@@ -28,6 +28,7 @@ jobs:
             - name: build docker image
               run: docker build -t talel12/back-session7 .
             
+            
             - name: login to dockerhub
               uses: docker/login-action@v3
               with:
@@ -36,5 +37,11 @@ jobs:
 
             - name: push image docker 
               run: docker push talel12/back-session7:latest
+
+            - name: tag image With version number
+              run: docker tag talel12/back-session7 talel12/back-session7:${{ github.run_number }}
+
+            - name: push image with version number
+              run: docker push talel12/back-session7:${{ github.run_number }}
 
     # deployment
