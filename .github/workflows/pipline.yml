@@ -18,31 +18,31 @@ jobs:
             - name: Unit Test
               run: npm run test
 
-    # build-and-push:
-    #     runs-on: ubuntu-latest
-    #     needs: test
-    #     steps:
-    #         - name: checkout
-    #           uses: actions/checkout@v4
+    build-and-push:
+        runs-on: ubuntu-latest
+        needs: test
+        steps:
+            - name: checkout
+              uses: actions/checkout@v4
 
-    #         - name: build docker image
-    #           run: docker build -t talel12/back-session7 .
+            - name: build docker image
+              run: docker build -t talel12/back-session7 .
             
             
-    #         - name: login to dockerhub
-    #           uses: docker/login-action@v3
-    #           with:
-    #                 username: ${{ vars.DOCKERHUB_USERNAME }}
-    #                 password: ${{ secrets.DOCKERHUB_TOKEN }}
+            - name: login to dockerhub
+              uses: docker/login-action@v3
+              with:
+                    username: ${{ vars.DOCKERHUB_USERNAME }}
+                    password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    #         - name: push image docker 
-    #           run: docker push talel12/back-session7:latest
+            - name: push image docker 
+              run: docker push talel12/back-session7:latest
 
-    #         - name: tag image With version number
-    #           run: docker tag talel12/back-session7 talel12/back-session7:${{ github.run_number }}
+            - name: tag image With version number
+              run: docker tag talel12/back-session7 talel12/back-session7:${{ github.run_number }}
 
-    #         - name: push image with version number
-    #           run: docker push talel12/back-session7:${{ github.run_number }}
+            - name: push image with version number
+              run: docker push talel12/back-session7:${{ github.run_number }}
 
     deployment:
         runs-on: ubuntu-latest
