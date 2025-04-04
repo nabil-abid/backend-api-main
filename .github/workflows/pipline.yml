@@ -34,4 +34,7 @@ jobs:
                     username: ${{ vars.DOCKERHUB_USERNAME }}
                     password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+            - name: push image docker 
+              run: docker push talel12/back-session7:latest
+
     # deployment
