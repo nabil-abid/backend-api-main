@@ -2,8 +2,8 @@ name: Pipeline backend
 
 on:
     push:
-        branches: 
-            - main
+        branches: [master, main, develop]
+           
 
 jobs:
     test:
@@ -12,17 +12,11 @@ jobs:
             - name: checkout
               uses: actions/checkout@v4
 
-            - name: check folders and files
-              run: |
-                echo "Checking folders and files..."
-                ls -l
-                echo "Folders and files checked."
+            - name: install dependencies
+              run: npm i
 
-            - name: check node version
-              run: |
-                echo "Checking node version..."
-                node -v
-                echo "Node version checked."
+            - name: Unit Test
+              run: npm run test
 
     # build and push
 
