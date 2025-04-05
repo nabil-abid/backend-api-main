@@ -19,7 +19,9 @@ jobs:
 
       - name: Unit Test
         continue-on-error: true
-        run: npm run test || echo "::set-output name=status::failure"
+        run: |
+            npm run test || echo "TEST_STATUS=failure" >> $GITHUB_ENV
+            echo "TEST_STATUS=${TEST_STATUS:-success}" >> $GITHUB_ENV
 
       - name: Notify Test Results
         if: always()
