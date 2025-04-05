@@ -53,8 +53,7 @@ jobs:
             Commit: ${{ github.sha }}
             Triggered by: ${{ github.actor }}
             ${{ steps.check-tests.outcome == 'failure' && ':x: Tests failed!' || ':white_check_mark: Tests passed!' }}
-            ${{ steps.check-tests.outcome == 'failure' && 'Test report available: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' || '' }}
-
+            ${{ steps.check-tests.outcome == 'failure' && format('Test report available: https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) || '' }}
 
   build-and-push:
     runs-on: ubuntu-latest
