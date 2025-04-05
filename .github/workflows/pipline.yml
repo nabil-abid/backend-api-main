@@ -27,9 +27,28 @@ jobs:
                 mkdir test-report
                 npm run test -- --json --outputFile=test-report/test-report.json
               continue-on-error: true
+
+            - name: upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                name: Jest-Report
+                path: test-report/test-report.json
                
-            - name: cat Test result
-              run:  cat test-report/test-report.json
+            - name: Check test results and fail if tests failed
+              id: check-tests
+              run: |
+                # Simple check using Node.js to see if the tests failed
+                node -e "
+                const fs = require('fs');
+                const report = JSON.parse(fs.readFileSync('test-reports/test-report.json'));
+                if (report.success === false || report.numFailedTests > 0) {
+                  console.error('::error::Tests failed. Stopping workflow.');
+                  process.exit(1);
+                }
+                "
+      
+
+            
 
     build-and-push:
         runs-on: ubuntu-latest
