@@ -18,24 +18,43 @@ jobs:
         run: npm i
 
       - name: Unit Test
-        continue-on-error: true
         run: |
-            npm run test || echo "TEST_STATUS=failure" >> $GITHUB_ENV
-            echo "TEST_STATUS=${TEST_STATUS:-success}" >> $GITHUB_ENV
+          mkdir -p test-reports
+          npm test -- --json --outputFile=test-reports/test-report.json
+        continue-on-error: true
+
+      - name: Upload test report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: test-reports/test-report.json
+
+      - name: Check test results and fail if tests failed
+        id: check-tests
+        run: |
+          # Simple check using Node.js to see if the tests failed
+          node -e "
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('test-reports/test-report.json'));
+          if (report.success === false || report.numFailedTests > 0) {
+            console.error('::error::Tests failed. Stopping workflow.');
+            process.exit(1);
+          }
+          "
 
       - name: Notify Test Results
         if: always()
         uses: act10ns/slack@v2
         with:
-          status: ${{ steps.tests.outputs.status || job.status }}
+          status: ${{ steps.check-tests.outcome == 'failure' && 'failure' || 'success' }}
+          channel: "#workflows"
           message: |
             *Test Phase Results* (${{ job.status }})
             Branch: ${{ github.ref }}
             Commit: ${{ github.sha }}
             Triggered by: ${{ github.actor }}
-            ${{ steps.tests.outputs.status == 'failure' && ':x: Tests failed!' || ':white_check_mark: Tests passed!' }}
-            ${{ steps.tests.outputs.status == 'failure' && 'Check the workflow run for details.' || '' }}
-
+            ${{ steps.check-tests.outcome == 'failure' && ':x: Tests failed!' || ':white_check_mark: Tests passed!' }}
+            ${{ steps.check-tests.outcome == 'failure' && 'Test report artifact available for download.' || '' }}
   build-and-push:
     runs-on: ubuntu-latest
     needs: test
