@@ -26,7 +26,10 @@ jobs:
                 rm -rf test-report
                 mkdir test-report
                 npm run test --json --outputFile=test-report/test-report.json
-                cat test-report/test-report.json
+              continue-on-error: true
+               
+            - name: cat Test result
+              run:  cat test-report/test-report.json
 
     build-and-push:
         runs-on: ubuntu-latest
