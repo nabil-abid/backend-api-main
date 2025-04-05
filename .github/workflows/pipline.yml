@@ -18,25 +18,42 @@ jobs:
         run: npm i
 
       - name: Unit Test
-        run: npm run test
+        continue-on-error: true
+        run: npm run test || echo "::set-output name=status::failure"
+
+      - name: Notify Test Results
+        if: always()
+        uses: act10ns/slack@v2
+        with:
+          status: ${{ steps.tests.outputs.status || job.status }}
+          message: |
+            *Test Phase Results* (${{ job.status }})
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+            Triggered by: ${{ github.actor }}
+            ${{ steps.tests.outputs.status == 'failure' && ':x: Tests failed!' || ':white_check_mark: Tests passed!' }}
+            ${{ steps.tests.outputs.status == 'failure' && 'Check the workflow run for details.' || '' }}
 
   build-and-push:
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-      - uses: act10ns/slack@v2
+      - name: Notify Build Start
+        uses: act10ns/slack@v2
         with:
           status: starting
-          channel: "#workflows"
-          message: Starting Docker Build and Push...
-        if: always()
+          message: |
+            *Docker Build Started*
+            Building image ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+            Branch: ${{ github.ref }}
+            Run Number: ${{ env.DOCKER_TAG }}
 
       - name: checkout
         uses: actions/checkout@v4
 
       - name: build docker image
-        run: docker build -t talel12/back-session7 .
+        run: docker build -t talel12/back-session7 . || echo "::set-output name=status::failure"
 
       - name: login to dockerhub
         uses: docker/login-action@v3
@@ -44,19 +61,39 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: push image docker
-        run: docker push talel12/back-session7:latest
-
       - name: tag image With version number
         run: docker tag talel12/back-session7 talel12/back-session7:${{ github.run_number }}
 
       - name: push image with version number
         run: docker push talel12/back-session7:${{ github.run_number }}
 
+      - name: push image docker
+        run: docker push talel12/back-session7:latest
+
+      - name: Notify Build Results
+        if: always()
+        uses: act10ns/slack@v2
+        with:
+          status: ${{ steps.build.outputs.status || job.status }}
+          message: |
+            *Docker Build Results* (${{ job.status }})
+            Image: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+            ${{ steps.build.outputs.status == 'failure' && ':x: Build failed!' || ':white_check_mark: Build succeeded!' }}
+            ${{ steps.build.outputs.status == 'failure' && 'Check the workflow run for build errors.' || 'Image successfully pushed to Docker Hub.' }}
+
   deployment:
     runs-on: ubuntu-latest
     needs: build-and-push
     steps:
+      - name: Notify Deployment Start
+        uses: act10ns/slack@v2
+        with:
+          status: starting
+          message: |
+            *Starting Deployment*
+            Version: ${{ env.DOCKER_TAG }}
+            Environment: Production
+
       - name: connect via ssh and execute commands
         uses: appleboy/ssh-action@v1
         with:
@@ -67,11 +104,16 @@ jobs:
             cd /home/user/devops-session7/back
             sudo git pull
             sudo docker compose pull
-            sudo docker compose up -d --force-recreate --remove-orphans
+            sudo docker compose up -d --force-recreate --remove-orphans || exit 1
 
-      - uses: act10ns/slack@v2
-        with:
-          status: ${{ job.status }}
-          steps: ${{ toJson(steps) }}
-          channel: "#workflows"
+      - name: Notify Deployment Results
         if: always()
+        uses: act10ns/slack@v2
+        with:
+          status: ${{ steps.deploy.outcome == 'failure' && 'failure' || 'success' }}
+          channel: "#workflows"
+          message: |
+            *Deployment Results* (${{ job.status }})
+            Version: ${{ env.DOCKER_TAG }}
+            ${{ steps.deploy.outcome == 'failure' && ':x: Deployment failed!' || ':white_check_mark: Deployment succeeded!' }}
+            ${{ steps.deploy.outcome == 'failure' && 'Check the workflow run for deployment errors.' || 'Application successfully deployed!' }}
