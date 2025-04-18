@@ -7,7 +7,7 @@ on:
 env:
     IMAGE_NAME: abid127/backend-api
     BUILD_NUMBER: ${{ github.run_number }}
-    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    #SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 jobs:
     unit-test:
@@ -45,19 +45,7 @@ jobs:
                 }
                 "
 
-            - uses: act10ns/slack@v2
-              if: always()
-              with:
-                status: ${{ job.status }}
-                steps: ${{ toJson(steps) }}    
-                message: |
-                    *Test Phase Results* (${{ job.status }})
-                    Branch: ${{ github.ref }}
-                    Commit: ${{ github.sha }}
-                    Triggered by: ${{ github.actor }}
-                    ${{ steps.check-tests.outcome == 'failure' && ':x: Tests failed!' || ':white_check_mark: Tests passed!' }}
-                    ${{ steps.check-tests.outcome == 'failure' && format('Test report available: https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) || '' }}
-             
+          
 
     build-and-push:
         runs-on: ubuntu-latest
