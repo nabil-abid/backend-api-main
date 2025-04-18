@@ -1,0 +1,182 @@
+name: Production Pipeline - Backend
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on tags starting with 'v' (e.g., v1.0.0)
+
+env:
+  IMAGE_NAME: abid127/backend-api
+  BUILD_NUMBER: ${{ github.run_number }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: install dependencies
+        run: npm i
+
+      - name: Unit Test
+        run: |
+          rm -rf test-report
+          mkdir test-report
+          npm run test -- --json --outputFile=test-report/test-report.json
+        continue-on-error: true
+
+      - name: upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jest-Report
+          path: test-report/test-report.json
+         
+      - name: Check test results and fail if tests failed
+        id: check-tests
+        run: |
+          node -e "
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('test-report/test-report.json'));
+          if (report.success === false || report.numFailedTests > 0) {
+            console.error('::error::Tests failed. Stopping workflow.');
+            process.exit(1);
+          }
+          "
+      - name: Notify Test Results
+        uses: act10ns/slack@v2
+        if: always()
+        with:
+          status: ${{ job.status }}
+          message: |
+              *Production Test Phase Results* (${{ job.status }})
+              Tag: ${{ github.ref }}
+              Version: ${{ github.ref_name }}
+              Triggered by: ${{ github.actor }}
+              ${{ steps.check-tests.outcome == 'failure' && ':x: Tests failed!' || ':white_check_mark: Tests passed!' }}
+
+  build-and-push-production:
+    runs-on: ubuntu-latest
+    needs: unit-test
+    steps:
+      - name: Notify Production Build Start
+        uses: act10ns/slack@v2
+        with:
+          status: starting
+          message: |
+              *Production Docker Build Started*
+              Building image ${{ env.IMAGE_NAME }}
+              Tag: ${{ github.ref }}
+              Version: ${{ github.ref_name }}
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: build docker image
+        id: build
+        run: docker build -t ${{env.IMAGE_NAME}} . || echo "::error::Build failed"
+
+      - name: login to dockerhub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: tag image with version tag
+        run: |
+          docker tag ${{env.IMAGE_NAME}} ${{env.IMAGE_NAME}}:${{ github.ref_name }}
+          docker tag ${{env.IMAGE_NAME}} ${{env.IMAGE_NAME}}:latest-prod
+
+      - name: push images
+        run: |
+          docker push ${{env.IMAGE_NAME}}:${{ github.ref_name }}
+          docker push ${{env.IMAGE_NAME}}:latest-prod
+
+      - name: Notify Build Results
+        if: always()
+        uses: act10ns/slack@v2
+        with:
+          status: ${{ job.status }}
+          message: |
+            *Production Docker Build Results* (${{ job.status }})
+            Image: ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ${{ job.status == 'failure' && ':x: Build failed!' || ':white_check_mark: Build succeeded!' }}
+
+  trivy-scan-production:
+    runs-on: ubuntu-latest
+    needs: build-and-push-production
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Pull Docker image
+        run: docker pull ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+
+      - name: Scan Docker image with Trivy
+        id: trivy-scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: '${{ env.IMAGE_NAME }}:${{ github.ref_name }}'
+          format: 'table'
+          ignore-unfixed: true
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH' # More strict for production
+
+      - name: Notify Scan Results
+        if: always()
+        uses: act10ns/slack@v2
+        with:
+          status: ${{ steps.trivy-scan.outcome == 'failure' && 'failure' || 'success' }}
+          message: |
+              *Production Trivy Scan Results* (${{ job.status }})
+              Image: ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+              ${{ steps.trivy-scan.outcome == 'failure' && ':x: Critical/High vulnerabilities found!' || ':white_check_mark: No critical/high vulnerabilities found!' }}
+
+  production-deployment:
+    runs-on: ubuntu-latest
+    needs: [build-and-push-production, trivy-scan-production]
+    steps:
+      - name: Notify Production Deployment Start
+        uses: act10ns/slack@v2
+        with:
+          status: starting
+          message: |
+            *Starting Production Deployment*
+            Version: ${{ github.ref_name }}
+            Environment: Production
+
+      - name: connect to production via ssh
+        id: deploy-prod
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HOST }}
+          username: user
+          password: ${{ secrets.PASSWORD }}
+          script: |
+            cd /path/to/production/deployment
+            sudo docker-compose pull
+            sudo docker-compose up -d --force-recreate --remove-orphans || exit 1
+            echo "Deployment of version ${{ github.ref_name }} completed"
+      
+      - name: Notify Deployment Results
+        if: always()
+        uses: act10ns/slack@v2
+        with:
+          status: ${{ steps.deploy-prod.outcome == 'failure' && 'failure' || 'success' }}
+          message: |
+              *Production Deployment Results* (${{ job.status }})
+              Version: ${{ github.ref_name }}
+              ${{ steps.deploy-prod.outcome == 'failure' && ':x: Deployment failed!' || ':white_check_mark: Deployment succeeded!' }}
+              ${{ steps.deploy-prod.outcome == 'failure' && 'Check the workflow run for errors.' || 'Application successfully deployed to production!' }}

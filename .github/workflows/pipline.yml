@@ -5,7 +5,7 @@ on:
         branches: [master, main, develop]
            
 env:
-    IMAGE_NAME: talel12/back-session7
+    IMAGE_NAME: abid127/backend-api
     BUILD_NUMBER: ${{ github.run_number }}
     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
@@ -128,7 +128,7 @@ jobs:
                     username: user
                     password: ${{ secrets.PASSWORD }}
                     script: |
-                        cd /home/user/devops-session7/back
+                        cd /home/user/devops-project/back
                         sudo git pull
                         sudo docker compose pull
                         sudo docker compose up -d --force-recreate --remove-orphans || exit 1
