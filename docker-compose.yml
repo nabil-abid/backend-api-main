@@ -1,6 +1,6 @@
 services:
   back-end:
-    image: back-session7
+    image: backend-api
     depends_on: 
       - database
     build:
