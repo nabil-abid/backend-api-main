@@ -7,7 +7,7 @@ on:
 env:
     IMAGE_NAME: abid127/backend-api
     BUILD_NUMBER: ${{ github.run_number }}
-    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    #SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 jobs:
     unit-test:
